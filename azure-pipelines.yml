@@ -1,0 +1,54 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  buildConfiguration: 'production'
+  nodeVersion: '18.x'
+
+stages:
+  - stage: Build
+    jobs:
+      - job: BuildAngularApp
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: 'Install Node.js'
+
+          - task: Npm@1
+            inputs:
+              command: 'ci'
+            displayName: 'Install dependencies'
+
+          - task: Npm@1
+            inputs:
+              command: 'custom'
+              customCommand: 'run build:prod'
+            displayName: 'Build Angular app'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)'
+              artifactName: 'drop'
+            displayName: 'Publish artifacts'
+
+  - stage: Deploy
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployToAzure
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: 'Azure Subscription'
+                    appType: 'webAppLinux'
+                    appName: 'leave-application-app'
+                    package: '$(Pipeline.Workspace)/drop'
+                  displayName: 'Deploy to Azure App Service'
